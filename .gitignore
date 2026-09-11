@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# Generated beside your config by `spark snapshot --write`. Anchored to the repo
+# root: an unanchored pattern also swallowed the reference baseline the package
+# ships and the suite reads.
+/spark-baseline.yaml
+/spark-baseline.yaml.bak
+!sparklib/data/spark-baseline.yaml
+
+# Fault records and parameter sweeps written by `spark`. These fill up fast.
+records/*
+!records/flex-param-sweep-fleet-20260909.json
+!records/flex-param-sweep-id17-20260909.json

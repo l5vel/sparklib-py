@@ -1,0 +1,196 @@
+# SPARK baseline for rig-flex -- the reference a later `spark audit`
+# compares against. Regenerate with `spark snapshot --write` only when the
+# bus is known good.
+meta:
+  rig_name: rig-flex
+  config: spark.yaml
+  captured_utc: '2026-09-09T22:50:22+00:00'
+  controller_type: sparkflex
+  generation: fw25+
+  can_interface: can0
+  git_rev: 0b520e8
+controllers:
+  10:
+    role: drive/RB
+    serial: 'C7B24C10'
+    firmware: '26.1.6'
+    status_1_period_ms: 20.0
+  11:
+    role: steer/RB
+    serial: 'AB15F6C7'
+    firmware: '26.1.6'
+    status_1_period_ms: 20.0
+  12:
+    role: drive/RF
+    serial: '6B029ADD'
+    firmware: '26.1.6'
+    status_1_period_ms: 20.0
+  13:
+    role: steer/RF
+    serial: '4D9AB6E7'
+    firmware: '26.1.6'
+    status_1_period_ms: 20.0
+  14:
+    role: drive/LF
+    serial: '08FE696E'
+    firmware: '26.1.6'
+    status_1_period_ms: 20.0
+  15:
+    role: steer/LF
+    serial: '5400CEBD'
+    firmware: '26.1.6'
+    status_1_period_ms: 20.0
+  16:
+    role: drive/LB
+    serial: 'F3003513'
+    firmware: '26.1.6'
+    status_1_period_ms: 20.0
+  17:
+    role: steer/LB
+    serial: '498B2579'
+    firmware: '26.1.6'
+    status_1_period_ms: 20.0
+parameters:
+  # Undeclared ids only: the declared file answers for the rest, and a value
+  # here is what a bus known to be good was holding, not what anything requires.
+  # Raw uint32 words, which is what the wire carries and what compares exactly.
+  captured_ids: 138
+  common:
+    1: 1  # Input Mode
+    5: 0  # Control Type
+    16: 0  # F 0 = 0
+    17: 0  # IZone 0 = 0
+    18: 0  # D Filter 0 = 0
+    21: 0  # P 1 = 0
+    22: 0  # I 1 = 0
+    23: 0  # D 1 = 0
+    24: 0  # F 1 = 0
+    25: 0  # IZone 1 = 0
+    26: 0  # D Filter 1 = 0
+    27: 3212836864  # Output Min 1 = -1
+    28: 1065353216  # Output Max 1 = 1
+    29: 0  # P 2 = 0
+    30: 0  # I 2 = 0
+    31: 0  # D 2 = 0
+    32: 0  # F 2 = 0
+    33: 0  # IZone 2 = 0
+    34: 0  # D Filter 2 = 0
+    35: 3212836864  # Output Min 2 = -1
+    36: 1065353216  # Output Max 2 = 1
+    37: 0  # P 3 = 0
+    38: 0  # I 3 = 0
+    39: 0  # D 3 = 0
+    40: 0  # F 3 = 0
+    41: 0  # IZone 3 = 0
+    42: 0  # D Filter 3 = 0
+    43: 3212836864  # Output Min 3 = -1
+    44: 1065353216  # Output Max 3 = 1
+    50: 0  # Limit Switch Fwd Polarity
+    51: 0  # Limit Switch Rev Polarity
+    57: 0  # Follower ID
+    58: 0  # Follower Config
+    61: 10000  # Smart Current Config
+    62: 4294967295  # Smart Current Reserved
+    75: 0  # Compensated Nominal Voltage = 0
+    96: 0  # I Max Accum 0 = 0
+    97: 0  # Reserved = 0
+    98: 0  # Reserved = 0
+    99: 0  # Reserved = 0
+    100: 0  # I Max Accum 1 = 0
+    101: 0  # Reserved = 0
+    102: 0  # Reserved = 0
+    103: 0  # Reserved = 0
+    104: 0  # I Max Accum 2 = 0
+    105: 0  # Reserved = 0
+    106: 0  # Reserved = 0
+    107: 0  # Reserved = 0
+    108: 0  # I Max Accum 3 = 0
+    109: 0  # Reserved = 0
+    110: 0  # Reserved = 0
+    111: 0  # Reserved = 0
+    112: 1065353216  # Position Conversion Factor = 1
+    113: 1065353216  # Velocity Conversion Factor = 1
+    115: 0  # Soft Limit Forward = 0
+    116: 0  # Soft Limit Reverse = 0
+    119: 1065353216  # Analog Position Conversion = 1
+    120: 1065353216  # Analog Velocity Conversion = 1
+    121: 64  # Analog Average Depth
+    122: 0  # Analog Sensor Mode
+    123: 0  # Analog Inverted
+    124: 200  # Analog Sample Delta
+    127: 0  # Compatibility Port Config
+    129: 64  # Alt Encoder Average Depth
+    130: 200  # Alt Encoder Sample Delta
+    131: 0  # Alt Encoder Inverted
+    132: 1065353216  # Alt Encoder Position Conversion = 1
+    133: 1065353216  # Alt Encoder Velocity Conversion = 1
+    138: 227  # Num Parameters
+    139: 1065353216  # Duty Cycle Position Factor = 1
+    140: 1065353216  # Duty Cycle Velocity Factor = 1
+    141: 0  # Duty Cycle Inverted
+    142: 0  # Duty Cycle Sensor Mode
+    143: 7  # Duty Cycle Average Depth
+    145: 0  # Duty Cycle Offset Legacy = 0
+    152: 0  # Duty Cycle Zero Centered
+    153: 7  # Duty Cycle Sensor Prescaler
+    154: 0  # Duty Cycle Offset = 0
+    155: 8537  # Product Id
+    156: 1  # Device Major Version
+    157: 2  # Device Minor Version
+    166: 0  # MAXMotion Max Velocity 0 = 0
+    167: 0  # MAXMotion Max Accel 0 = 0
+    168: 0  # MAXMotion Max Jerk 0 = 0
+    169: 0  # MAXMotion Allowed Closed Loop Error 0 = 0
+    170: 0  # MAXMotion Position Mode 0
+    171: 0  # MAXMotion Max Velocity 1 = 0
+    172: 0  # MAXMotion Max Accel 1 = 0
+    173: 0  # MAXMotion Max Jerk 1 = 0
+    174: 0  # MAXMotion Allowed Closed Loop Error 1 = 0
+    175: 0  # MAXMotion Position Mode 1
+    176: 0  # MAXMotion Max Velocity 2 = 0
+    177: 0  # MAXMotion Max Accel 2 = 0
+    178: 0  # MAXMotion Max Jerk 2 = 0
+    179: 0  # MAXMotion Allowed Closed Loop Error 2 = 0
+    180: 0  # MAXMotion Position Mode 2
+    181: 0  # MAXMotion Max Velocity 3 = 0
+    182: 0  # MAXMotion Max Accel 3 = 0
+    183: 0  # MAXMotion Max Jerk 3 = 0
+    184: 0  # MAXMotion Allowed Closed Loop Error 3 = 0
+    185: 0  # MAXMotion Position Mode 3
+    186: 0  # Force Enable Status 0
+    187: 0  # Force Enable Status 1
+    188: 0  # Force Enable Status 2
+    189: 0  # Force Enable Status 3
+    190: 0  # Force Enable Status 4
+    191: 0  # Force Enable Status 5
+    192: 0  # Force Enable Status 6
+    193: 0  # Force Enable Status 7
+    196: 0  # Duty Cycle Encoder Start Pulse Us = 0
+    197: 0  # Duty Cycle Encoder End Pulse Us = 0
+    198: 0  # Param Table Version
+    200: 0
+    201: 0
+    202: 0  # = 0
+    203: 0  # = 0
+    204: 0  # = 0
+    205: 0  # = 0
+    206: 0  # = 0
+    207: 0  # = 0
+    208: 1065353216  # = 1
+    209: 0  # = 0
+    210: 0  # = 0
+    211: 0  # = 0
+    212: 0  # = 0
+    213: 1065353216  # = 1
+    214: 0  # = 0
+    215: 0  # = 0
+    216: 0  # = 0
+    217: 0  # = 0
+    218: 1065353216  # = 1
+    219: 0  # = 0
+    220: 0  # = 0
+    221: 0  # = 0
+    222: 0  # = 0
+    223: 1065353216  # = 1
+    225: 0
+    226: 0

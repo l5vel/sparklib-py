@@ -1,0 +1,979 @@
+# sparklib configuration. One file; everything sparklib reads is here.
+#
+# THIS IS A WORKED EXAMPLE, not a blank template. The bus below is rig-flex:
+# eight SPARK Flex on firmware 26.1.6 driving a swerve base, and it is the bus
+# most of the measurements in docs/ were taken on. Copy this file, then replace
+# `devices`, `serials` and `rig_name` with your own. `spark learn-serials
+# --write` fills in the serials for you once the ids are right.
+#
+# Two things to set before anything works:
+#   controller_type   which SPARK product is on the bus
+#   can.interface     the netdev name your adapter came up as
+#
+# Find the netdev name with `ip -d link show type can`. Kernel canN numbering is
+# not stable across reboots, so a rig with two adapters should name them with a
+# udev rule instead -- docs/CAN-SETUP.md has the rule and how to write it.
+#
+# The declared settings for BOTH products are in this file, under `sparkflex:`
+# and `sparkmax:`. controller_type selects one. `spark audit` compares the live
+# bus against the selected block and `spark provision --write` writes it back.
+
+
+# ---------------------------------------------------------------------------
+# The bus
+# ---------------------------------------------------------------------------
+
+controller_type: sparkflex        # sparkflex | sparkmax
+
+can:
+  interface: gsusb                 # netdev name; see docs/CAN-SETUP.md
+  bitrate: 1000000                # SPARK bus is 1 Mbit classic CAN, not FD
+  wait_timeout_s: 20              # how long to wait for the netdev (0 = forever)
+  skip_gs_usb_rebind: false       # true for a dongle the pre-emptive rebind breaks
+
+# Device ids, grouped by role. Both names are free-form: the roles below happen
+# to be a swerve drive, and a single-motor rig is just as valid:
+#
+#   devices:
+#     main: {motor: 1}
+#
+# The roles named here are what `by_role` in the product blocks keys on, and
+# `spark` only ever addresses the SPARK roles. A group of ids belonging to some
+# other device -- CANcoders here, on a second adapter -- is listed so the tooling
+# knows those ids are spoken for, and is never swept or written.
+#
+# Ids are unique per BUS, not per robot. Two groups on different adapters may
+# hold the same numbers, which is why the selection is by group and not by id.
+devices:
+  drive:    {LF: 14, RF: 12, LB: 16, RB: 10}
+  steer:    {LF: 15, RF: 13, LB: 17, RB: 11}
+  cancoder: {LF: 1, RF: 3, LB: 2, RB: 4}      # CTRE, on the second adapter
+
+# Controller serials, written by `spark learn-serials --write`. Addressing a
+# controller by serial survives a lost CAN id, which is the failure that makes
+# an id-addressed repair impossible.
+serials:                                # hardware serials, api 0x2F0
+  drive:    {LF: '08FE696E', RF: '6B029ADD', LB: 'F3003513', RB: 'C7B24C10'}
+  steer:    {LF: '5400CEBD', RF: '4D9AB6E7', LB: '498B2579', RB: 'AB15F6C7'}
+
+# True if the hardware limit switches on this rig are wired normally-closed.
+# Getting this wrong disables a motor silently; see docs/FAILURE-CATALOGUE.md F2.
+limit_switch_polarity: false
+
+# The absolute encoder that tells a steer axis which way its wheel points.
+# Needs the swerve extra: uv add "sparklib-py[swerve]". Omit this block entirely
+# on a rig with no CANcoders and nothing here reads it.
+#
+# `bus` is the netdev the CANcoders are on, which is usually NOT the SPARK bus:
+# a CANivore runs CAN FD at a different bitrate. `offsets_deg` is what each
+# encoder reads with that wheel pointed at your chosen zero, recorded once.
+# `steer_gear_ratio` is motor revolutions per revolution of the steered axis,
+# and getting it wrong moves the axis confidently to the wrong place.
+cancoder:
+  bus: canivore
+  steer_gear_ratio: 26.0           # SDS MK5i; an MK2 is 12.8
+  offsets_deg: {LF: 78.07, RF: -94.40, LB: 109.72, RB: -98.26}
+
+# Chassis geometry, read by sparklib.kinematics to turn a driver command into
+# per-wheel speed and angle. Measure both between wheel centres, in metres.
+# `max_speed` is what full drive output produces on your rig, and it sets the
+# scale every module speed is reported against.
+#
+# Omit this block on anything that is not a four-corner chassis; only the
+# kinematics helpers and examples/06_joystick_drive.py read it.
+chassis:
+  track_width: 0.55               # left wheel centre to right wheel centre
+  wheel_base: 0.62                # front wheel centre to back wheel centre
+  max_speed: 3.0                  # m/s at full drive output
+
+# Motor-rail battery, for grading the voltage the SPARKs report.
+# chemistry: LiFePO4 | SLA, or set full_v and empty_v explicitly.
+rail:
+  chemistry: LiFePO4
+
+# A label for this bus. It names the snapshot and keys the live-experiment
+# guard, so a rig you must not write to can be refused by name.
+rig_name: rig-flex
+
+
+# ---------------------------------------------------------------------------
+# Declared configuration, SPARK Flex
+# ---------------------------------------------------------------------------
+
+sparkflex:
+  # THE standard SparkFlex configuration for every motor on every base.
+  #
+  # EDIT THIS FILE to change what a motor should be set to. It is shared across all
+  # bases -- only per-motor identity lives elsewhere:
+  #     CAN id       baseNN_config.yaml  base.can_ids
+  #     serial       baseNN_config.yaml  base.can_serials   (written by learn-serials)
+  #     wheel offset baseNN_config.yaml  base.module_offsets_deg
+  #
+  # `deviates: true` means the value differs from REV's factory default, so a factory
+  # reset drops it and it MUST be re-applied. Those are the settings that go missing
+  # when the post-firmware-update factory reset is skipped.
+  # `spark provision --id N --write --persist` reads this file and writes back every
+  # declared setting one controller has drifted on, then burns once.
+  #
+  # param_id is what PARAMETER_WRITE (api 0x0E0) addresses. Full table with types and
+  # defaults: rev_parameter_index.tsv (199 entries).
+  #
+  # NOTE every setting here reads back over CAN, so `spark audit` compares all of
+  # them. Only Status 1 Period is also verifiable as a CADENCE, because firmware 25+
+  # broadcasts Status 2-9 only if they are needed.
+  # Provisioning order matters -- see spark_setup_reference.yaml.
+
+
+  meta:
+    source: assembly manual Appendix A, joined onto REV-Specs SparkParameters-v0.1.2
+    applies_to: SPARK Flex
+    firmware_verified: 26.1.6
+    settings: 46
+    deviating_from_factory_default: 9
+
+  # Identical on every motor regardless of role.
+  common:
+    - name: Motor Type
+      tab: Basic
+      param_id: 2
+      type: UINT32
+      value: BRUSHLESS
+      rev_default: BRUSHLESS
+      deviates: false
+    - name: Idle Mode
+      tab: Basic
+      param_id: 6
+      type: UINT32
+      value: BRAKE
+      rev_default: COAST
+      deviates: true
+    - name: Input Deadband
+      tab: Basic
+      param_id: 7
+      type: FLOAT
+      value: 0.05
+      rev_default: 0.05
+      deviates: false
+    - name: Inverted
+      tab: Basic
+      param_id: 45
+      type: BOOL
+      value: False
+      rev_default: False
+      deviates: false
+    - name: Open Loop Ramp Rate
+      tab: Basic
+      param_id: 56
+      type: FLOAT
+      value: 0
+      rev_default: 0.0
+      deviates: false
+    - name: Commutation Advance
+      tab: Motor Advanced
+      param_id: 3
+      type: FLOAT
+      value: 0
+      rev_default: 0.0
+      deviates: false
+    - name: Motor Kv
+      tab: Motor Advanced
+      param_id: 63
+      type: UINT32
+      value: 480
+      rev_default: 480
+      deviates: false
+    - name: Pole Pairs
+      tab: Brushless
+      param_id: 10
+      type: UINT32
+      value: 7
+      rev_default: 7
+      deviates: false
+    - name: Current Chop
+      tab: Current Limits
+      param_id: 11
+      type: FLOAT
+      value: 115
+      rev_default: 115
+      deviates: false
+    - name: Current Chop Cycles
+      tab: Current Limits
+      param_id: 12
+      type: UINT32
+      value: 0
+      rev_default: 0
+      deviates: false
+    - name: Smart Current Stall Limit
+      tab: Current Limits
+      param_id: 59
+      type: UINT32
+      value: 80
+      rev_default: 80
+      deviates: false
+    - name: Smart Current Free Limit
+      tab: Current Limits
+      param_id: 60
+      type: UINT32
+      value: 20
+      rev_default: 20
+      deviates: false
+    - name: Closed Loop Control Sensor
+      tab: Closed Loop Control
+      param_id: 9
+      type: UINT32
+      value: MAIN_ENCODER
+      rev_default: NONE
+      deviates: true
+    - name: Voltage Compensation Mode
+      tab: Closed Loop Control
+      param_id: 74
+      type: UINT32
+      value: NO_VOLTAGE_COMP
+      rev_default: NO_VOLTAGE_COMP
+      deviates: false
+    - name: Closed Loop Ramp Rate
+      tab: Closed Loop Control
+      param_id: 114
+      type: FLOAT
+      value: 0
+      rev_default: 0
+      deviates: false
+    - name: Position PID Wrap Enable
+      tab: Closed Loop Control
+      param_id: 149
+      type: BOOL
+      value: False
+      rev_default: False
+      deviates: false
+    - name: Position PID Min Input
+      tab: Closed Loop Control
+      param_id: 150
+      type: FLOAT
+      value: 0
+      rev_default: 0
+      deviates: false
+    - name: Position PID Max Input
+      tab: Closed Loop Control
+      param_id: 151
+      type: FLOAT
+      value: 0
+      rev_default: 0
+      deviates: false
+    - name: I 0
+      tab: Closed Loop Control Slot 0
+      param_id: 14
+      type: FLOAT
+      value: 0
+      rev_default: 0.0
+      deviates: false
+    - name: D 0
+      tab: Closed Loop Control Slot 0
+      param_id: 15
+      type: FLOAT
+      value: 0
+      rev_default: 0.0
+      deviates: false
+    - name: Output Min 0
+      tab: Closed Loop Control Slot 0
+      param_id: 19
+      type: FLOAT
+      value: -1
+      rev_default: -1.0
+      deviates: false
+    - name: Output Max 0
+      tab: Closed Loop Control Slot 0
+      param_id: 20
+      type: FLOAT
+      value: 1
+      rev_default: 1.0
+      deviates: false
+    - name: Hard Limit Fwd En
+      tab: Limits
+      param_id: 52
+      type: BOOL
+      value: True
+      rev_default: True
+      deviates: false
+    - name: Hard Limit Rev En
+      tab: Limits
+      param_id: 53
+      type: BOOL
+      value: True
+      rev_default: True
+      deviates: false
+    - name: Soft Limit Fwd En
+      tab: Limits
+      param_id: 54
+      type: BOOL
+      value: False
+      rev_default: False
+      deviates: false
+    - name: Soft Limit Rev En
+      tab: Limits
+      param_id: 55
+      type: BOOL
+      value: False
+      rev_default: False
+      deviates: false
+    - name: Encoder Counts Per Rev
+      tab: Primary Encoder
+      param_id: 69
+      type: UINT32
+      value: 4096
+      rev_default: 4096
+      deviates: false
+    - name: Encoder Average Depth
+      tab: Primary Encoder
+      param_id: 70
+      type: UINT32
+      value: 64
+      rev_default: 64
+      deviates: false
+    - name: Encoder Sample Delta
+      tab: Primary Encoder
+      param_id: 71
+      type: UINT32
+      value: 200
+      rev_default: 200
+      deviates: false
+    - name: Encoder Inverted
+      tab: Primary Encoder
+      param_id: 72
+      type: BOOL
+      value: False
+      rev_default: False
+      deviates: false
+    - name: Uvw Sensor Sample Rate
+      tab: Primary Encoder
+      param_id: 136
+      type: FLOAT
+      value: 0.03125
+      rev_default: 0.03125
+      deviates: false
+    - name: Uvw Sensor Average Depth
+      tab: Primary Encoder
+      param_id: 137
+      type: UINT32
+      value: 3
+      rev_default: 3
+      deviates: false
+    - name: Alt Encoder Counts Per Rev
+      tab: Alternate Encoder
+      param_id: 128
+      type: UINT32
+      value: 4096
+      rev_default: 4096
+      deviates: false
+    - name: Status 0 Period
+      tab: Status Frame Period
+      param_id: 158
+      type: UINT32
+      value: 10
+      rev_default: 10
+      deviates: false
+    - name: Status 1 Period
+      tab: Status Frame Period
+      param_id: 159
+      type: UINT32
+      value: 20
+      rev_default: 250
+      deviates: true
+    - name: Status 2 Period
+      tab: Status Frame Period
+      param_id: 160
+      type: UINT32
+      value: 20
+      rev_default: 20
+      deviates: false
+    - name: Status 3 Period
+      tab: Status Frame Period
+      param_id: 161
+      type: UINT32
+      value: 50
+      rev_default: 20
+      deviates: true
+    - name: Status 4 Period
+      tab: Status Frame Period
+      param_id: 162
+      type: UINT32
+      value: 20
+      rev_default: 20
+      deviates: false
+    - name: Status 5 Period
+      tab: Status Frame Period
+      param_id: 163
+      type: UINT32
+      value: 200
+      rev_default: 20
+      deviates: true
+    - name: Status 6 Period
+      tab: Status Frame Period
+      param_id: 164
+      type: UINT32
+      value: 200
+      rev_default: 20
+      deviates: true
+    - name: Status 7 Period
+      tab: Status Frame Period
+      param_id: 165
+      type: UINT32
+      value: 250
+      rev_default: 20
+      deviates: true
+    - name: Status 8 Period
+      tab: Status Frame Period
+      param_id: 199
+      type: UINT32
+      value: 20
+      rev_default: 20
+      deviates: false
+    - name: Status 9 Period
+      tab: Status Frame Period
+      param_id: 224
+      type: UINT32
+      value: 100
+      rev_default: 20
+      deviates: true
+    - name: Follower Mode Leader Id
+      tab: Follower Mode
+      param_id: 194
+      type: UINT32
+      value: 0
+      rev_default: False        # REV's own table gives this UINT32 a boolean default
+      deviates: false
+    - name: Follower Mode Is Inverted
+      tab: Follower Mode
+      param_id: 195
+      type: BOOL
+      value: False
+      rev_default: False
+      deviates: false
+
+  # Differs by what the motor drives. Steer runs a stiffer loop than drive.
+  by_role:
+    - name: P 0
+      tab: Closed Loop Control Slot 0
+      param_id: 13
+      type: FLOAT
+      rev_default: 0.0
+      deviates: true
+      values:
+        steer: 0.5
+        drive: 0.119
+
+# ---------------------------------------------------------------------------
+# Declared configuration, SPARK MAX
+# ---------------------------------------------------------------------------
+
+sparkmax:
+  # The SPARK MAX half of the declared motor configuration. Mirrors the schema of
+  # sparkflex_motor_defaults.yaml exactly: meta / common / by_role, same per-entry
+  # fields, so motor_settings() and deviating_settings() read either one unchanged.
+  #
+  # This is the file a robot declaring `base.controller_type: sparkmax` reads.
+  # `_defaults_path()` in spark_admin.py selects it from MOTOR_DEFAULTS_FILES, and
+  # `spark_cli._use_declared_product()` is what hands the product down, because
+  # spark_admin does not read baseNN_config.yaml. `require_motor_defaults_for`
+  # then checks that meta.applies_to below agrees with the robot that asked, so a
+  # wrong edit here is refused rather than written into a controller.
+  #
+  # What is read from here is NOT what is written to a controller on this
+  # generation. Every CAN write this package makes to a pre-25 MAX is RAM only and
+  # is lost at the next power cycle -- see SPARKMAX.md section 3. Persistence does
+  # exist on the firmware, by the burn described below, but nothing in
+  # arm_base_control sends it. `spark repair` refuses on pre-25 before it sends
+  # anything, so today this file is what `spark defaults` prints and what an audit
+  # compares against.
+  #
+  # EDIT THIS FILE to change what a MAX should be set to. Per-motor identity lives
+  # elsewhere, same as on the Flex side:
+  #     CAN id       baseNN_config.yaml  base.can_ids
+  #     wheel offset baseNN_config.yaml  base.module_offsets_deg
+  # There is no serial row here. Unique ID Broadcast is apiClass 47,
+  # versionImplemented 25.0.0 in tests/support/spec/REV-spark-frames-2.1.0.json,
+  # so firmware 24.0.1 broadcasts no serial and base.can_serials cannot be filled
+  # on this fleet. Parameters 47/48/49, documented "Reserved", read 0xFFFFFFFF and
+  # are not serials.
+  #
+  #
+  # WHAT "CAN-verifiable" MEANS HERE
+  #
+  # Both generations answer a parameter read, in different dialects, and
+  # the Flex half of that was only established on 2026-09-09. Measured on
+  # base02, 2026-09-04, firmware 24.0.1, 8x SPARK MAX on the 1 Mbit gs_usb adapter
+  # can0: all 134 parameters, ids 0 through 133, answered on all eight
+  # controllers. Zero refused, zero silent. A MAX does not have to be inferred
+  # from its broadcasts; it can be asked. Parameter 0 returns each device's own
+  # CAN id, which is the self-check proving the reads are live and per-device.
+  #
+  # So every parameter entry below carries "CAN-verifiable: YES", and that is new.
+  # The status-period entries carry "CAN-verifiable: NO", and that is not a gap in
+  # the tooling: on pre-25 they are not parameters at all. See below.
+  #
+  #
+  # WHAT param_id ADDRESSES ON THIS FIRMWARE
+  #
+  # Not PARAMETER_WRITE. That frame is api class 14 (arb 0x02053800) and
+  # versionImplemented 25.0.0, so 24.0.1 does not carry it, and an unmatched
+  # extended id is dropped in silence rather than refused. That silence is why
+  # this firmware looked unwritable for as long as it did.
+  #
+  # Pre-25 puts both directions on api class 48:
+  #     arb   = 0x02050000 | ((0x300 | param_id) << 6) | device_id
+  #     read  = zero-length frame, reply on the SAME arb id
+  #     write = 5 bytes [int32 value][type tag], device echoes the value it took
+  #     reply = [uint32 value][type tag][status byte], status 0 = ok
+  # The LEGACY_PARAM_ACCESS block in spark_admin.py, SparkAdmin.read_legacy_param
+  # and write_legacy_param. LEGACY_PARAM_MAX is 133 and the guard in
+  # _legacy_param_arb is deliberate: above the table the same api range carries
+  # commands, and 255 lands on Persist Parameters.
+  #
+  # A PLAIN WRITE IS RAM ONLY. Proven, not assumed: Idle Mode was set to BRAKE on
+  # all eight, read back as BRAKE, the motor rail was cut and restored, and all
+  # eight came back COAST with sticky 0x0200. Flash-resident provisioning was
+  # unaffected (P 0 and the stall limit survived both cycles). The 25+ Persist
+  # Parameters frame is apiClass 63 idx 15, versionImplemented 25.0.0, so that
+  # route does not exist here.
+  #
+  # A BURN IS NOT A PLAIN WRITE, and this is what changed on 2026-09-08. Measured
+  # on base02, firmware 24.0.1: api 0x072, arbitration id 0x02051C80 | id, with a
+  # two-byte payload carrying the magic 15011 LITTLE-ENDIAN, replies 0x00 on the
+  # request's own arbitration id and COMMITS PARAMETERS 0-133 TO FLASH. Ids 3 and 4
+  # were written Idle Mode COAST->BRAKE, burned, and read back BRAKE after a rail
+  # cycle while a no-burn control on id 8 read back COAST; both were then burned
+  # back to COAST, which also survived a further cycle. A wrong magic, a big-endian
+  # magic and a one-byte payload each answer 0xFF, and a zero-length frame is not
+  # answered at all. The magic is the same PERSIST_MAGIC the 25+ frame carries:
+  # REV's own spec names that signal "Magic Number" with decodedMin == decodedMax
+  # == 15011 in tests/support/spec/REV-spark-frames-2.1.0.json. The status periods
+  # are NOT part of what the burn commits, measured the same day and recorded with
+  # the period entries below.
+  #
+  # THIS PACKAGE DOES NOT SEND THAT BURN. Nothing in arm_base_control emits api
+  # 0x072, it sits on the injector denylist in tests/support/sparkhw/wire.py, and
+  # there is no CLI path to it on pre-25. Consequence: on a MAX `spark repair`
+  # would still be a re-apply on every boot, not a fix. The authoritative record is
+  # the pre25.burn_flash_api claim in spark_provenance.py.
+  #
+  #
+  # THIS FILE RECORDS WHAT THE FLEET HOLDS, NOT AN ASPIRATION
+  #
+  # The Flex file is prescriptive, and it declares what a motor SHOULD be set to.
+  # `spark provision --write --persist` restores every declared setting one
+  # controller has drifted on, while `spark repair` puts back Status 1 Period
+  # alone. Every value below is instead what was READ off all
+  # eight controllers on base02 on 2026-09-04. Two consequences worth stating
+  # plainly rather than discovering later:
+  #   1. An audit against this file passes by construction. It is a baseline, not
+  #      yet a target.
+  #   2. Where the Flex fleet is provisioned and this one is not (Idle Mode is
+  #      COAST here, not BRAKE; Closed Loop Control Sensor is NONE here, not
+  #      MAIN_ENCODER), that difference is recorded as measured. Deciding those
+  #      should change is a separate decision. Acting on it is no longer blocked by
+  #      the hardware -- the burn above makes a parameter stick -- but it is
+  #      blocked by this package, which sends no burn and offers no command that
+  #      does. Whether burning as routine practice is wise is a further question:
+  #      flash cycles are finite.
+  #
+  # `deviates: true` keeps the Flex file's meaning: the value differs from REV's
+  # factory default, so a factory reset drops it and it must be re-applied. On this
+  # fleet exactly two PARAMETERS deviate, ids 13 and 59, and both are
+  # flash-resident and survived two rail cycles. The seven status periods that
+  # deviate are a stronger case: they are volatile, a rail cycle alone drops them,
+  # and the burn does not reach them either. That is why apply_boot_config re-sends
+  # them whenever the driver constructs or reconfigures a handler, and why
+  # `spark throttle` stays mandatory after every power event on this generation.
+  #
+  #
+  # FLEET DRIFT: NONE
+  #
+  # All 134 parameters were read from all eight controllers. Exactly ONE differs
+  # across the fleet, param 13 "P 0", and it splits cleanly by role rather than by
+  # controller: 2.0 on drive (ids 1, 4, 5, 8) and 0.1 on steer (ids 2, 3, 6, 7).
+  # The other 133 are byte-identical across all eight. There is zero configuration
+  # drift on this fleet, which is why every entry except P 0 sits in `common`.
+  #
+  #
+  # WHAT IS DELIBERATELY NOT AN ENTRY HERE
+  #
+  #   param 0   CAN ID. Per-motor identity, lives in base.can_ids. It is read as
+  #             the liveness self-check, never written by this file.
+  #   param 5   Control Type. A RUNTIME value, not stored configuration. It reads
+  #             back whatever the controller is currently doing.
+  #   136, 137  Uvw Sensor Sample Rate / Average Depth
+  #   149-151   Position PID Wrap Enable / Min Input / Max Input
+  #   194, 195  Follower Mode Leader Id / Is Inverted
+  #             All six are ids above LEGACY_PARAM_MAX and were NOT read this
+  #             session, so there is no measured value to record and none is
+  #             invented. Whether 24.0.1 carries them at all is an OPEN QUESTION.
+  #             Ids 158-165 were probed above the table and came back refused, so
+  #             refusal is plausible here too, but plausible is not measured.
+  #             SETTLED BY: read_legacy_param on each id with its guard widened,
+  #             reads only, never a write, and never anywhere near 242 or 255.
+  #   199, 224  Status 8 / Status 9 Period. These frames do not exist on pre-25.
+  #             The wire carries 0x060 0x061 0x062 0x063 0x065 0x066 0x067 and
+  #             nothing else; no 0x2E0, no 0x2E1, no 0x2F0.
+  #
+  #
+  # SOURCES FOR THE COLUMNS
+  #
+  # `value` is measured, per the note above. `name`, `type` and the REV default
+  # for parameters come from rev_parameter_index.tsv, 199 entries.
+  #
+  # `rev_default` for the STATUS PERIODS does NOT come from that TSV. The TSV's
+  # status-period defaults (159=250, 160-165=20) are the 25+ table and do not
+  # describe this firmware. The numbers below were measured on base02 after a rail
+  # cycle with nothing re-applying: 0x060=10, 0x061=20, 0x062=20, 0x063=50,
+  # 0x065=200, 0x066=200, 0x067=250.
+  #
+  # `tab` is the RHC grouping carried over verbatim from the Flex file so the two
+  # files sort the same way. It was NOT re-checked against RHC2's SPARK MAX view,
+  # and it is display only: no code reads it for anything but column order.
+
+
+  meta:
+    source: read over CAN from all 8 controllers on base02, 2026-09-04, firmware
+            24.0.1, legacy parameter access on api class 48; names, types and REV
+            parameter defaults joined onto rev_parameter_index.tsv
+    applies_to: SPARK MAX
+    firmware_verified: 24.0.1
+    settings: 37
+    deviating_from_factory_default: 9
+
+  # Identical on every motor regardless of role. Byte-identical across all eight
+  # controllers, measured, not assumed.
+  common:
+    - name: Motor Type                    # CAN-verifiable: YES, param 2 read on all 8
+      tab: Basic
+      param_id: 2
+      type: UINT32
+      value: BRUSHLESS
+      rev_default: BRUSHLESS
+      deviates: false
+    - name: Idle Mode                     # CAN-verifiable: YES, param 6 read on all 8
+      # Reads 0 (COAST) on all eight. The Flex file declares BRAKE; this fleet is
+      # NOT in BRAKE. BRAKE was written to all eight on 2026-09-04 and read back,
+      # then a rail cycle returned every one of them to COAST. Making BRAKE stick
+      # needs the burn described in the header, and that burn works: on 2026-09-08
+      # ids 3 and 4 were written BRAKE, burned with api 0x072 and the magic 15011,
+      # and held BRAKE across a rail cycle. Both were burned back to COAST at the
+      # end of that session, so COAST is still what all eight hold. This package
+      # sends no burn, so nothing it runs changes that.
+      tab: Basic
+      param_id: 6
+      type: UINT32
+      value: COAST
+      rev_default: COAST
+      deviates: false
+    - name: Input Deadband                # CAN-verifiable: YES, param 7 read on all 8
+      tab: Basic
+      param_id: 7
+      type: FLOAT
+      value: 0.05
+      rev_default: 0.05
+      deviates: false
+    - name: Inverted                      # CAN-verifiable: YES, param 45 read on all 8
+      tab: Basic
+      param_id: 45
+      type: BOOL
+      value: False
+      rev_default: False
+      deviates: false
+    - name: Open Loop Ramp Rate           # CAN-verifiable: YES, param 56 read on all 8
+      tab: Basic
+      param_id: 56
+      type: FLOAT
+      value: 0
+      rev_default: 0.0
+      deviates: false
+    - name: Commutation Advance           # CAN-verifiable: YES, param 3 read on all 8
+      tab: Motor Advanced
+      param_id: 3
+      type: FLOAT
+      value: 0
+      rev_default: 0.0
+      deviates: false
+    - name: Motor Kv                      # CAN-verifiable: YES, param 63 read on all 8
+      tab: Motor Advanced
+      param_id: 63
+      type: UINT32
+      value: 480
+      rev_default: 480
+      deviates: false
+    - name: Pole Pairs                    # CAN-verifiable: YES, param 10 read on all 8
+      tab: Brushless
+      param_id: 10
+      type: UINT32
+      value: 7
+      rev_default: 7
+      deviates: false
+    - name: Current Chop                  # CAN-verifiable: YES, param 11 read on all 8
+      tab: Current Limits
+      param_id: 11
+      type: FLOAT
+      value: 115
+      rev_default: 115
+      deviates: false
+    - name: Current Chop Cycles           # CAN-verifiable: YES, param 12 read on all 8
+      tab: Current Limits
+      param_id: 12
+      type: UINT32
+      value: 0
+      rev_default: 0
+      deviates: false
+    - name: Smart Current Stall Limit     # CAN-verifiable: YES, param 59 read on all 8
+      # One of only two parameters on this fleet that deviate from REV default.
+      # 40 A on all eight, against REV's 80. Flash-resident: it survived both rail
+      # cycles this session, so a rail cycle does not drop it and a factory reset
+      # does.
+      tab: Current Limits
+      param_id: 59
+      type: UINT32
+      value: 40
+      rev_default: 80
+      deviates: true
+    - name: Smart Current Free Limit      # CAN-verifiable: YES, param 60 read on all 8
+      tab: Current Limits
+      param_id: 60
+      type: UINT32
+      value: 20
+      rev_default: 20
+      deviates: false
+    - name: Closed Loop Control Sensor    # CAN-verifiable: YES, param 9 read on all 8
+      # Reads 4294967295 on the fleet, which is outside the Sensor enum: RHC2 shows
+      # the field with no option selected. Written 0 it shows None, written 1
+      # Primary Encoder. Recorded as measured so nothing writes it.
+      tab: Closed Loop Control
+      param_id: 9
+      type: UINT32
+      value: 4294967295
+      rev_default: NONE
+      deviates: false
+    - name: Voltage Compensation Mode     # CAN-verifiable: YES, param 74 read on all 8
+      tab: Closed Loop Control
+      param_id: 74
+      type: UINT32
+      value: NO_VOLTAGE_COMP
+      rev_default: NO_VOLTAGE_COMP
+      deviates: false
+    - name: Closed Loop Ramp Rate         # CAN-verifiable: YES, param 114 read on all 8
+      tab: Closed Loop Control
+      param_id: 114
+      type: FLOAT
+      value: 0
+      rev_default: 0
+      deviates: false
+    - name: I 0                           # CAN-verifiable: YES, param 14 read on all 8
+      tab: Closed Loop Control Slot 0
+      param_id: 14
+      type: FLOAT
+      value: 0
+      rev_default: 0.0
+      deviates: false
+    - name: D 0                           # CAN-verifiable: YES, param 15 read on all 8
+      tab: Closed Loop Control Slot 0
+      param_id: 15
+      type: FLOAT
+      value: 0
+      rev_default: 0.0
+      deviates: false
+    - name: Output Min 0                  # CAN-verifiable: YES, param 19 read on all 8
+      tab: Closed Loop Control Slot 0
+      param_id: 19
+      type: FLOAT
+      value: -1
+      rev_default: -1.0
+      deviates: false
+    - name: Output Max 0                  # CAN-verifiable: YES, param 20 read on all 8
+      tab: Closed Loop Control Slot 0
+      param_id: 20
+      type: FLOAT
+      value: 1
+      rev_default: 1.0
+      deviates: false
+    - name: Hard Limit Fwd En             # CAN-verifiable: YES, param 52 read on all 8
+      tab: Limits
+      param_id: 52
+      type: BOOL
+      value: True
+      rev_default: True
+      deviates: false
+    - name: Hard Limit Rev En             # CAN-verifiable: YES, param 53 read on all 8
+      tab: Limits
+      param_id: 53
+      type: BOOL
+      value: True
+      rev_default: True
+      deviates: false
+    - name: Soft Limit Fwd En             # CAN-verifiable: YES, param 54 read on all 8
+      tab: Limits
+      param_id: 54
+      type: BOOL
+      value: False
+      rev_default: False
+      deviates: false
+    - name: Soft Limit Rev En             # CAN-verifiable: YES, param 55 read on all 8
+      tab: Limits
+      param_id: 55
+      type: BOOL
+      value: False
+      rev_default: False
+      deviates: false
+    - name: Encoder Counts Per Rev        # CAN-verifiable: YES, param 69 read on all 8
+      # 4096, which is REV's default. The Flex file carries 409 and marks it
+      # deviating. Do not copy that number onto a MAX; this fleet is at 4096.
+      tab: Primary Encoder
+      param_id: 69
+      type: UINT32
+      value: 4096
+      rev_default: 4096
+      deviates: false
+    - name: Encoder Average Depth         # CAN-verifiable: YES, param 70 read on all 8
+      tab: Primary Encoder
+      param_id: 70
+      type: UINT32
+      value: 64
+      rev_default: 64
+      deviates: false
+    - name: Encoder Sample Delta          # CAN-verifiable: YES, param 71 read on all 8
+      tab: Primary Encoder
+      param_id: 71
+      type: UINT32
+      value: 200
+      rev_default: 200
+      deviates: false
+    - name: Encoder Inverted              # CAN-verifiable: YES, param 72 read on all 8
+      tab: Primary Encoder
+      param_id: 72
+      type: BOOL
+      value: False
+      rev_default: False
+      deviates: false
+    - name: Alt Encoder Counts Per Rev    # CAN-verifiable: YES, param 128 read on all 8
+      # The parameter answers. The alternate-encoder STATUS FRAME does not: 0x064
+      # never broadcasts on this firmware. Reading the parameter is the only way
+      # to see this value on a MAX.
+      tab: Alternate Encoder
+      param_id: 128
+      type: UINT32
+      value: 4096
+      rev_default: 4096
+      deviates: false
+
+    # -- status frame periods ---------------------------------------------------
+    # CAN-verifiable: NO. Not because tooling is missing, but because on pre-25
+    # these are NOT PARAMETERS. Ids 158-165 were probed on api class 48 and every
+    # one replied with a NON-ZERO status byte, which is a refusal, not silence.
+    # The period moves on api class 6 instead:
+    #     arb = 0x02051800 + (frame_index << 6) + device_id
+    #     2 bytes, little-endian ms, DLC 2, NO acknowledgement of any kind
+    # SparkAdmin.set_legacy_status_period in spark_admin.py. Because there is no
+    # acknowledgement and no readback, the only confirmation available is
+    # watching the frame's arrival cadence change on the wire, which is why
+    # Status 4 below cannot be confirmed at all.
+    #
+    # The param_id column keeps REV's canonical ids from rev_parameter_index.tsv
+    # so the two product files line up row for row. On this firmware those ids are
+    # REFUSED. Do not write them with write_legacy_param.
+    #
+    # THESE DO NOT SURVIVE A POWER CYCLE, AND NO BURN MAKES THEM. Measured on
+    # base02, 2026-09-08: id 3 had 0x060 set to a distinctive 77 ms -- neither
+    # REV's 10 nor the throttle's 50, so nothing else produces that number -- was
+    # burned with api 0x072 and the magic 15011 and accepted with 0x00, and after a
+    # rail cycle read 10.0 ms, as did all seven others. The burn
+    # commits the parameter table and stops there, so the periods below have to be
+    # re-applied after every power event, by the driver at boot or by
+    # `spark throttle`.
+    #
+    # `value` is spark_can._SPARKMAX_STATUS_PERIODS_MS (spark_can.py:25-27), which
+    # apply_boot_config sends when the driver constructs or reconfigures a
+    # handler (spark_can.py:110, :150). It is this
+    # package's own throttle for an 8-motor bus on a gs_usb adapter, not any REV
+    # figure. `rev_default` is REV's pre-25 default MEASURED after a rail cycle
+    # with nothing re-applying, not the TSV's 25+ numbers.
+    - name: Status 0 Period               # CAN-verifiable: NO, refused as a param; api class 6 only
+      tab: Status Frame Period
+      param_id: 158
+      type: UINT32
+      value: 50
+      rev_default: 10
+      deviates: true
+    - name: Status 1 Period               # CAN-verifiable: NO, refused as a param; api class 6 only
+      tab: Status Frame Period
+      param_id: 159
+      type: UINT32
+      value: 100
+      rev_default: 20
+      deviates: true
+    - name: Status 2 Period               # CAN-verifiable: NO, refused as a param; api class 6 only
+      tab: Status Frame Period
+      param_id: 160
+      type: UINT32
+      value: 100
+      rev_default: 20
+      deviates: true
+    - name: Status 3 Period               # CAN-verifiable: NO, refused as a param; api class 6 only
+      tab: Status Frame Period
+      param_id: 161
+      type: UINT32
+      value: 500
+      rev_default: 50
+      deviates: true
+    - name: Status 4 Period               # CAN-verifiable: NO, and not even observable
+      # apply_boot_config sends 500 ms for frame 4 when it runs. Whether
+      # the controller takes it is UNKNOWN: 0x064 does not broadcast, before or
+      # after a rail cycle, on any of the eight. That is this firmware not emitting
+      # the alternate-encoder frame rather than a lost write, so there is also no
+      # REV default to record. Marked deviating on the safe side, meaning re-apply
+      # it, because the question cannot be settled from the wire.
+      # SETTLED BY: reading param 128 over api class 48, which does answer, or by
+      # a REVLib 2024.x header stating which frames 24.0.1 emits.
+      tab: Status Frame Period
+      param_id: 162
+      type: UINT32
+      value: 500
+      rev_default: unknown
+      deviates: true
+    - name: Status 5 Period               # CAN-verifiable: NO, refused as a param; api class 6 only
+      tab: Status Frame Period
+      param_id: 163
+      type: UINT32
+      value: 1000
+      rev_default: 200
+      deviates: true
+    - name: Status 6 Period               # CAN-verifiable: NO, refused as a param; api class 6 only
+      tab: Status Frame Period
+      param_id: 164
+      type: UINT32
+      value: 1000
+      rev_default: 200
+      deviates: true
+    - name: Status 7 Period               # CAN-verifiable: NO, refused as a param; api class 6 only
+      # The one period this package never touches. _SPARKMAX_STATUS_PERIODS_MS
+      # stops at frame 6, so 0x067 sits at REV's pre-25 default of 250 ms in both
+      # states, measured either side of the rail cycle. Not a deviation.
+      tab: Status Frame Period
+      param_id: 165
+      type: UINT32
+      value: 250
+      rev_default: 250
+      deviates: false
+
+  # Differs by what the motor drives. On this fleet this is the ONLY parameter
+  # that is not byte-identical across all eight controllers.
+  by_role:
+    - name: P 0                           # CAN-verifiable: YES, param 13 read on all 8
+      # 2.0 on drive (ids 1, 4, 5, 8), 0.1 on steer (ids 2, 3, 6, 7), on
+      # can0. Flash-resident: both values survived two rail cycles this
+      # session, so a rail cycle does not drop them and a factory reset does.
+      # Note the split is the opposite way round from the Flex file, where steer
+      # (0.5) is the stiffer of the two and drive is 0.119. Do not carry either
+      # pair across products.
+      tab: Closed Loop Control Slot 0
+      param_id: 13
+      type: FLOAT
+      rev_default: 0.0
+      deviates: true
+      values:
+        steer: 0.1
+        drive: 2.0

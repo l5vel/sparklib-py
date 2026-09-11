@@ -1,0 +1,52 @@
+# SPARK baseline for rig-max -- the reference a later `spark audit`
+# compares against. Regenerate with `spark snapshot --write` only when the
+# bus is known good.
+meta:
+  rig_name: rig-max
+  config: spark.yaml
+  captured_utc: '2026-09-09T06:27:05+00:00'
+  controller_type: sparkmax
+  generation: pre25
+  can_interface: can0
+  git_rev: 60aec3e
+controllers:
+  1:
+    role: drive/LB
+    serial: '66D3BDE5'
+    firmware: '24.0.1'
+    status_1_period_ms: 100.0
+  2:
+    role: steer/LB
+    serial: '481F7CB5'
+    firmware: '24.0.1'
+    status_1_period_ms: 100.0
+  3:
+    role: steer/RB
+    serial: 'EABE4C2E'
+    firmware: '24.0.1'
+    status_1_period_ms: 100.0
+  4:
+    role: drive/RB
+    serial: 'A7A98E23'
+    firmware: '24.0.1'
+    status_1_period_ms: 100.0
+  5:
+    role: drive/RF
+    serial: '249EB2B0'
+    firmware: '24.0.1'
+    status_1_period_ms: 100.0
+  6:
+    role: steer/RF
+    serial: '44E08E6A'
+    firmware: '24.0.1'
+    status_1_period_ms: 100.0
+  7:
+    role: steer/LF
+    serial: '5945A484'
+    firmware: '24.0.1'
+    status_1_period_ms: 100.0
+  8:
+    role: drive/LF
+    serial: '10487C0D'
+    firmware: '24.0.1'
+    status_1_period_ms: 100.0

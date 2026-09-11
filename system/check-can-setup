@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+# check-can-setup -- verify the Linux/CAN environment for ArmBaseControl.
+#
+# Read-only doctor. Checks every OS-level prerequisite the CANivore + SPARK
+# stack depends on and prints a PASS/WARN/FAIL line per item. Safe to run
+# anytime, as a normal user, before or after the Python env exists.
+#
+# Exit code: 0 if no hard FAILs, 1 otherwise. WARNs do not fail the run.
+#
+# Background -- the three fleet-drift issues this guards against (see SETUP.md):
+#   1. canivore-usb-kernel 1.16/1.17 fail to DKMS-build on Linux >= 6.13
+#      ("__ref_stack_chk_guard undefined"); only 1.15/1.14 link. Must be pinned.
+#   2. The DKMS module is unsigned, so Secure Boot rejects it at load time
+#      ("Key was rejected by service"). SB must be off (or shim validation
+#      disabled, or the module signed + a MOK enrolled).
+#   3. CANcoders broadcast CAN-FD; the canivore netdev must be reconfigured to
+#      FD (1M arb / 2M data) by canivore-fd.service or every read is dropped.
+
+fails=0
+warns=0
+
+pass() { printf '  [ \033[32mOK\033[0m ] %s\n' "$1"; }
+warn() { printf '  [\033[33mWARN\033[0m] %s\n' "$1"; warns=$((warns + 1)); }
+fail() { printf '  [\033[31mFAIL\033[0m] %s\n' "$1"; fails=$((fails + 1)); }
+info() { printf '         %s\n' "$1"; }
+section() { printf '\n=== %s ===\n' "$1"; }
+
+KREL=$(uname -r)
+
+# --- 1. CTR Electronics apt repo ------------------------------------------
+section "CTR apt repo"
+if ls /etc/apt/sources.list.d/ctr*.list >/dev/null 2>&1; then
+  pass "CTR apt source present ($(ls /etc/apt/sources.list.d/ctr*.list | tr '\n' ' '))"
+else
+  warn "no /etc/apt/sources.list.d/ctr*.list -- canivore-usb can't be apt-installed. See SETUP.md section 3."
+fi
+
+# --- 2. canivore-usb-kernel package + version pin -------------------------
+section "canivore-usb-kernel package"
+KVER=$(dpkg-query -W -f='${Version}' canivore-usb-kernel 2>/dev/null || true)
+if [ -z "$KVER" ]; then
+  fail "canivore-usb-kernel is NOT installed. Install the pinned version: sudo apt install canivore-usb-kernel=1.15"
+else
+  case "$KVER" in
+    1.16*|1.17*|1.18*|1.19*)
+      fail "canivore-usb-kernel=$KVER does NOT DKMS-build on Linux >= 6.13 (__ref_stack_chk_guard). Downgrade: sudo apt install --allow-downgrades canivore-usb-kernel=1.15" ;;
+    1.15*|1.14*|1.13*)
+      pass "canivore-usb-kernel=$KVER (known-good, links on 6.8-6.14)" ;;
+    *)
+      warn "canivore-usb-kernel=$KVER -- unrecognized version; verify it DKMS-builds (1.15 is the known-good pin)." ;;
+  esac
+
+  # Pinned so `apt upgrade` can't pull the broken 1.16/1.17?
+  if apt-mark showhold 2>/dev/null | grep -qx canivore-usb-kernel; then
+    pass "canivore-usb-kernel is held (apt-mark hold)"
+  elif grep -rqs 'canivore-usb-kernel' /etc/apt/preferences.d/ 2>/dev/null; then
+    pass "canivore-usb-kernel is pinned (/etc/apt/preferences.d/)"
+  else
+    warn "canivore-usb-kernel is NOT pinned/held -- apt upgrade may pull broken 1.16/1.17. Run: sudo apt-mark hold canivore-usb-kernel"
+  fi
+fi
+
+# --- 3. Kernel headers + DKMS build for the running kernel ----------------
+section "DKMS module build ($KREL)"
+if [ -d "/usr/src/linux-headers-$KREL" ] || [ -d "/lib/modules/$KREL/build" ]; then
+  pass "kernel headers present for $KREL"
+else
+  fail "no kernel headers for $KREL -- DKMS can't build. Install: sudo apt install linux-headers-$KREL"
+fi
+
+if command -v dkms >/dev/null 2>&1; then
+  if dkms status 2>/dev/null | grep -i canivore | grep -q "$KREL"; then
+    if dkms status 2>/dev/null | grep -i canivore | grep "$KREL" | grep -qi installed; then
+      pass "canivore-usb DKMS module built+installed for $KREL"
+    else
+      warn "canivore-usb DKMS module present for $KREL but not 'installed' -- check: dkms status"
+    fi
+  else
+    fail "canivore-usb DKMS module NOT built for $KREL. Build: sudo dkms install canivore-usb/1.15 -k $KREL"
+  fi
+else
+  warn "dkms not installed -- can't confirm the module was built."
+fi
+
+# --- 4. Secure Boot / module signing --------------------------------------
+section "Secure Boot / module signing"
+LOADED=$(lsmod 2>/dev/null | awk '$1 ~ /canivore/ {print $1; exit}')
+if [ -n "$LOADED" ]; then
+  pass "canivore_usb module is loaded (signing/SB is not blocking it)"
+else
+  # Module not loaded -- Secure Boot is the usual culprit.
+  if command -v mokutil >/dev/null 2>&1; then
+    SB=$(mokutil --sb-state 2>/dev/null)
+    case "$SB" in
+      *"disabled"*|*"validation is disabled"*)
+        warn "canivore_usb not loaded, but Secure Boot is off/validation disabled ($SB). Load it: sudo modprobe canivore-usb" ;;
+      *"enabled"*)
+        fail "canivore_usb not loaded and Secure Boot is ENABLED -- the unsigned DKMS module is rejected ('Key was rejected by service'). Disable Secure Boot in UEFI, or run: sudo mokutil --disable-validation (reboot + confirm), or enroll a MOK and sign the module. See SETUP.md section 3b." ;;
+      *)
+        fail "canivore_usb not loaded. Try: sudo modprobe canivore-usb (then check 'Key was rejected by service' -> Secure Boot)." ;;
+    esac
+  else
+    fail "canivore_usb not loaded and mokutil missing. Try: sudo modprobe canivore-usb"
+  fi
+fi
+
+# Report SB state for the record even when the module is loaded.
+if command -v mokutil >/dev/null 2>&1; then
+  info "Secure Boot: $(mokutil --sb-state 2>/dev/null | tr '\n' ';')"
+fi
+
+# --- 5. CANivore netdev in CAN-FD mode ------------------------------------
+section "CANivore netdev (CANcoder bus)"
+CANIV_IF=
+for c in /sys/class/net/*; do
+  [ -e "$c" ] || continue
+  n=$(basename "$c")
+  if ip -d link show "$n" 2>/dev/null | grep -q canivore_usb; then
+    CANIV_IF=$n
+    break
+  fi
+done
+if [ -z "$CANIV_IF" ]; then
+  fail "no netdev bound to the canivore_usb driver -- CANcoders won't be visible. (Module loaded? See above.)"
+else
+  D=$(ip -d link show "$CANIV_IF" 2>/dev/null)
+  if printf '%s' "$D" | grep -q 'state UP\|UP,LOWER_UP'; then
+    UPOK=1; else UPOK=0; fi
+  if printf '%s' "$D" | grep -q 'dbitrate 2000000'; then FDOK=1; else FDOK=0; fi
+  if [ "$UPOK" = 1 ] && [ "$FDOK" = 1 ]; then
+    pass "$CANIV_IF up in CAN-FD mode (dbitrate 2M)"
+  elif [ "$FDOK" = 1 ]; then
+    warn "$CANIV_IF is FD but DOWN -- bring up: sudo systemctl restart canivore-fd.service"
+  else
+    fail "$CANIV_IF is NOT in FD mode -- CANcoder FD frames are dropped. Fix: sudo systemctl restart canivore-fd.service"
+  fi
+fi
+
+# canivore-fd.service + boot-time module autoload
+if command -v systemctl >/dev/null 2>&1; then
+  if systemctl is-enabled canivore-fd.service >/dev/null 2>&1; then
+    pass "canivore-fd.service enabled (FD bring-up at boot)"
+  else
+    warn "canivore-fd.service not enabled -- can0 won't auto-reconfigure to FD at boot. Run: sudo systemctl enable --now canivore-fd.service"
+  fi
+fi
+if [ -f /etc/modules-load.d/canivore.conf ]; then
+  pass "/etc/modules-load.d/canivore.conf present (module autoloads at boot)"
+else
+  warn "/etc/modules-load.d/canivore.conf missing -- canivore-usb won't autoload at boot."
+fi
+
+# --- 6. SPARK motor bus ----------------------------------------------------
+section "SPARK motor bus"
+GS_IF=
+for c in /sys/class/net/*; do
+  [ -e "$c" ] || continue
+  n=$(basename "$c")
+  ip -d link show "$n" 2>/dev/null | grep -q gs_usb && GS_IF="$GS_IF $n"
+done
+if [ -n "$GS_IF" ]; then
+  for g in $GS_IF; do
+    if ip -br link show "$g" 2>/dev/null | grep -qi ' up'; then
+      pass "gs_usb motor bus '$g' is up (candleLight)"
+    else
+      warn "gs_usb netdev '$g' exists but is DOWN -- CheckCanID brings it up at runtime, or: sudo ip link set $g up type can bitrate 1000000 txqueuelen 1000"
+    fi
+  done
+else
+  warn "no gs_usb SPARK bus found. Plug in the motor CAN adapter."
+fi
+
+# --- 7. tooling ------------------------------------------------------------
+section "Tooling"
+command -v candump >/dev/null 2>&1 && pass "can-utils present (candump)" || warn "can-utils missing -- sudo apt install can-utils (handy for debugging)"
+
+# --- summary ---------------------------------------------------------------
+section "Summary"
+printf '  %d fail(s), %d warning(s).\n' "$fails" "$warns"
+if [ "$fails" -gt 0 ]; then
+  printf '  Environment is NOT ready -- resolve the FAIL items above.\n'
+  exit 1
+fi
+if [ "$warns" -gt 0 ]; then
+  printf '  Core requirements met; review WARNs.\n'
+else
+  printf '  All checks passed.\n'
+fi
+exit 0

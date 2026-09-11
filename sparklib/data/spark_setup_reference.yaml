@@ -1,0 +1,38 @@
+# Intended SparkFlex configuration, from the assembly manual "Motor Set Up".
+# This is the DECLARED state -- what every controller is supposed to hold.
+# Compare a live bus against it; it is not written to devices by any code here.
+#
+# INCOMPLETE: the manual's Appendix A carries the full setting list. Only the
+# settings named in the main body are recorded below.
+
+meta:
+  source: assembly manual, section "Motor Set Up"
+  applies_to: SPARK Flex
+  recorded: 2026-08-27
+  firmware_observed: 26.1.6        # all 8 on base03, read via CAN api 0x098
+
+# Order matters. Skipping the factory reset after a firmware update is what
+# lets the CAN ID revert on a low-battery shutdown.
+provisioning:
+  - update firmware via RHC2 over USB-C (hold Mode button while reconnecting
+    to enter Recovery Device mode, select SPARK Flex, install latest)
+  - Configuration -> three dots -> FACTORY RESET      # required, not optional
+  - set CAN ID to match base.can_ids in the base config
+  - apply the settings below, then Save
+  - one motor connected at a time throughout
+
+# On firmware 25+ the id and the settings go over CAN, with every motor still on
+# the bus. `uv run spark set-id --serial X --to N` moves the id. `uv run spark
+# provision --id N --write --persist` restores every declared setting and burns
+# it once. The firmware update and the factory reset still need RHC2 over USB-C.
+
+settings:
+  idle_mode: BRAKE
+  closed_loop_sensor: MAIN_ENCODER
+  slot0_p:
+    steer: 0.5
+    drive: 0.119
+
+# Note: swerve_drive.py closes the steer loop host-side for SparkFlex
+# (_STEER_GAINS / _flex_p_output) and sends no PID-slot frames, so slot0_p
+# above is configured on the device but not what drives steering today.

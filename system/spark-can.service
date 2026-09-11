@@ -1,0 +1,11 @@
+[Unit]
+Description=Bring up SPARK CAN netdev can_spark at 1 Mbit/s
+# udev-triggered (not boot-only): brings the netdev up on every udev `add`, so a
+# plug or any USB re-enumeration self-heals the link -- unlike a boot-only unit. Started via ENV{SYSTEMD_WANTS} in 99-spark-can.rules.
+BindsTo=sys-subsystem-net-devices-can_spark.device
+After=sys-subsystem-net-devices-can_spark.device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/spark-can-bringup can_spark

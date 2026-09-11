@@ -1,0 +1,199 @@
+0	CAN ID	UINT32	RW	0
+1	Input Mode	UINT32	R	InputMode.PWM
+2	Motor Type	UINT32	RW	MotorType.BRUSHLESS
+3	Commutation Advance	FLOAT	RW	0.0
+4	Reserved	-	-	-
+5	Control Type	UINT32	RW	ControlType.DUTY_CYCLE
+6	Idle Mode	UINT32	RW	IdleMode.COAST
+7	Input Deadband	FLOAT	RW	0.05
+8	Reserved	-	-	-
+9	Closed Loop Control Sensor	UINT32	RW	Sensor.NONE
+10	Pole Pairs	UINT32	RW	7
+11	Current Chop	FLOAT	RW	115
+12	Current Chop Cycles	UINT32	RW	0
+13	P 0	FLOAT	RW	0.0
+14	I 0	FLOAT	RW	0.0
+15	D 0	FLOAT	RW	0.0
+16	F 0	FLOAT	RW	0.0
+17	IZone 0	FLOAT	RW	0.0
+18	D Filter 0	FLOAT	RW	0.0
+19	Output Min 0	FLOAT	RW	-1.0
+20	Output Max 0	FLOAT	RW	1.0
+21	P 1	FLOAT	RW	0.0
+22	I 1	FLOAT	RW	0.0
+23	D 1	FLOAT	RW	0.0
+24	F 1	FLOAT	RW	0.0
+25	IZone 1	FLOAT	RW	0.0
+26	D Filter 1	FLOAT	RW	0.0
+27	Output Min 1	FLOAT	RW	-1.0
+28	Output Max 1	FLOAT	RW	1.0
+29	P 2	FLOAT	RW	0.0
+30	I 2	FLOAT	RW	0.0
+31	D 2	FLOAT	RW	0.0
+32	F 2	FLOAT	RW	0.0
+33	IZone 2	FLOAT	RW	0.0
+34	D Filter 2	FLOAT	RW	0.0
+35	Output Min 2	FLOAT	RW	-1.0
+36	Output Max 2	FLOAT	RW	1.0
+37	P 3	FLOAT	RW	0.0
+38	I 3	FLOAT	RW	0.0
+39	D 3	FLOAT	RW	0.0
+40	F 3	FLOAT	RW	0.0
+41	IZone 3	FLOAT	RW	0.0
+42	D Filter 3	FLOAT	RW	0.0
+43	Output Min 3	FLOAT	RW	-1.0
+44	Output Max 3	FLOAT	RW	1.0
+45	Inverted	BOOL	RW	false
+46	Reserved	-	-	-
+47	Reserved	-	-	-
+48	Reserved	-	-	-
+49	Reserved	-	-	-
+50	Limit Switch Fwd Polarity	BOOL	RW	false
+51	Limit Switch Rev Polarity	BOOL	RW	false
+52	Hard Limit Fwd En	BOOL	RW	true
+53	Hard Limit Rev En	BOOL	RW	true
+54	Soft Limit Fwd En	BOOL	RW	false
+55	Soft Limit Rev En	BOOL	RW	false
+56	Open Loop Ramp Rate	FLOAT	RW	0.0
+57	Follower ID	UINT32	RW	0
+58	Follower Config	UINT32	RW	0
+59	Smart Current Stall Limit	UINT32	RW	80
+60	Smart Current Free Limit	UINT32	RW	20
+61	Smart Current Config	UINT32	RW	10000
+62	Smart Current Reserved	UINT32	RW	0
+63	Motor Kv	UINT32	RW	480
+64	Reserved	-	-	-
+65	Reserved	-	-	-
+66	Reserved	-	-	-
+67	Reserved	-	-	-
+68	Reserved	-	-	-
+69	Encoder Counts Per Rev	UINT32	RW	4096
+70	Encoder Average Depth	UINT32	RW	64
+71	Encoder Sample Delta	UINT32	RW	200
+72	Encoder Inverted	BOOL	RW	false
+73	Reserved	-	-	-
+74	Voltage Compensation Mode	UINT32	RW	VoltageCompMode.NO_VOLTAGE_COMP
+75	Compensated Nominal Voltage	FLOAT	RW	0
+76	SmartMotion Max Velocity 0	FLOAT	RW	0
+77	SmartMotion Max Accel 0	FLOAT	RW	0
+78	SmartMotion Min Vel Output 0	FLOAT	RW	0
+79	SmartMotion Allowed Closed Loop Error 0	FLOAT	RW	0
+80	SmartMotion Accel Strategy 0	UINT32	RW	AccelerationStrategy.TRAPEZOIDAL
+81	SmartMotion Max Velocity 1	FLOAT	RW	0
+82	SmartMotion Max Accel 1	FLOAT	RW	0
+83	SmartMotion Min Vel Output 1	FLOAT	RW	0
+84	SmartMotion Allowed Closed Loop Error 1	FLOAT	RW	0
+85	SmartMotion Accel Strategy 1	UINT32	RW	AccelerationStrategy.TRAPEZOIDAL
+86	SmartMotion Max Velocity 2	FLOAT	RW	0
+87	SmartMotion Max Accel 2	FLOAT	RW	0
+88	SmartMotion Min Vel Output 2	FLOAT	RW	0
+89	SmartMotion Allowed Closed Loop Error 2	FLOAT	RW	0
+90	SmartMotion Accel Strategy 2	UINT32	RW	AccelerationStrategy.TRAPEZOIDAL
+91	SmartMotion Max Velocity 3	FLOAT	RW	0
+92	SmartMotion Max Accel 3	FLOAT	RW	0
+93	SmartMotion Min Vel Output 3	FLOAT	RW	0
+94	SmartMotion Allowed Closed Loop Error 3	FLOAT	RW	0
+95	SmartMotion Accel Strategy 3	UINT32	RW	AccelerationStrategy.TRAPEZOIDAL
+96	I Max Accum 0	FLOAT	RW	0
+97	Reserved	-	-	-
+98	Reserved	-	-	-
+99	Reserved	-	-	-
+100	I Max Accum 1	FLOAT	RW	0
+101	Reserved	-	-	-
+102	Reserved	-	-	-
+103	Reserved	-	-	-
+104	I Max Accum 2	FLOAT	RW	0
+105	Reserved	-	-	-
+106	Reserved	-	-	-
+107	Reserved	-	-	-
+108	I Max Accum 3	FLOAT	RW	0
+109	Reserved	-	-	-
+110	Reserved	-	-	-
+111	Reserved	-	-	-
+112	Position Conversion Factor	FLOAT	RW	1.0
+113	Velocity Conversion Factor	FLOAT	RW	1.0
+114	Closed Loop Ramp Rate	FLOAT	RW	0
+115	Soft Limit Forward	FLOAT	RW	0
+116	Soft Limit Reverse	FLOAT	RW	0
+117	Reserved	-	-	-
+118	Reserved	-	-	-
+119	Analog Position Conversion	FLOAT	RW	1.0
+120	Analog Velocity Conversion	FLOAT	RW	1.0
+121	Analog Average Depth	UINT32	RW	64
+122	Analog Sensor Mode	UINT32	RW	AnalogMode.ABSOLUTE
+123	Analog Inverted	BOOL	RW	0
+124	Analog Sample Delta	UINT32	RW	200
+125	Reserved	-	-	-
+126	Reserved	-	-	-
+127	Compatibility Port Config	UINT32	RW	CompatibilityPort.DEFAULT
+128	Alt Encoder Counts Per Rev	UINT32	RW	4096
+129	Alt Encoder Average Depth	UINT32	RW	64
+130	Alt Encoder Sample Delta	UINT32	RW	200
+131	Alt Encoder Inverted	BOOL	RW	false
+132	Alt Encoder Position Conversion	FLOAT	RW	1.0
+133	Alt Encoder Velocity Conversion	FLOAT	RW	1.0
+134	Reserved	-	-	-
+135	Reserved	-	-	-
+136	Uvw Sensor Sample Rate	FLOAT	RW	0.03125
+137	Uvw Sensor Average Depth	UINT32	RW	3
+138	Num Parameters	UINT32	R	137
+139	Duty Cycle Position Factor	FLOAT	RW	1.0
+140	Duty Cycle Velocity Factor	FLOAT	RW	1.0
+141	Duty Cycle Inverted	BOOL	RW	false
+142	Duty Cycle Sensor Mode	UINT32	RW	DutyCycleMode.ABSOLUTE
+143	Duty Cycle Average Depth	UINT32	RW	7
+144	Reserved	-	-	-
+145	Duty Cycle Offset Legacy	FLOAT	RW	0
+146	Reserved	-	-	-
+147	Reserved	-	-	-
+148	Reserved	-	-	-
+149	Position PID Wrap Enable	BOOL	RW	false
+150	Position PID Min Input	FLOAT	RW	0
+151	Position PID Max Input	FLOAT	RW	0
+152	Duty Cycle Zero Centered	BOOL	RW	false
+153	Duty Cycle Sensor Prescaler	UINT32	RW	17
+154	Duty Cycle Offset	FLOAT	RW	0
+155	Product Id	UINT32	R	0
+156	Device Major Version	UINT32	R	0
+157	Device Minor Version	UINT32	R	4294967295
+158	Status 0 Period	UINT32	RW	10
+159	Status 1 Period	UINT32	RW	250
+160	Status 2 Period	UINT32	RW	20
+161	Status 3 Period	UINT32	RW	20
+162	Status 4 Period	UINT32	RW	20
+163	Status 5 Period	UINT32	RW	20
+164	Status 6 Period	UINT32	RW	20
+165	Status 7 Period	UINT32	RW	20
+166	MAXMotion Max Velocity 0	FLOAT	RW	0
+167	MAXMotion Max Accel 0	FLOAT	RW	0
+168	MAXMotion Max Jerk 0	FLOAT	RW	0
+169	MAXMotion Allowed Closed Loop Error 0	FLOAT	RW	0
+170	MAXMotion Position Mode 0	UINT32	RW	MAXMotionPositionMode.TRAPEZOIDAL
+171	MAXMotion Max Velocity 1	FLOAT	RW	0
+172	MAXMotion Max Accel 1	FLOAT	RW	0
+173	MAXMotion Max Jerk 1	FLOAT	RW	0
+174	MAXMotion Allowed Closed Loop Error 1	FLOAT	RW	0
+175	MAXMotion Position Mode 1	UINT32	RW	MAXMotionPositionMode.TRAPEZOIDAL
+176	MAXMotion Max Velocity 2	FLOAT	RW	0
+177	MAXMotion Max Accel 2	FLOAT	RW	0
+178	MAXMotion Max Jerk 2	FLOAT	RW	0
+179	MAXMotion Allowed Closed Loop Error 2	FLOAT	RW	0
+180	MAXMotion Position Mode 2	UINT32	RW	MAXMotionPositionMode.TRAPEZOIDAL
+181	MAXMotion Max Velocity 3	FLOAT	RW	0
+182	MAXMotion Max Accel 3	FLOAT	RW	0
+183	MAXMotion Max Jerk 3	FLOAT	RW	0
+184	MAXMotion Allowed Closed Loop Error 3	FLOAT	RW	0
+185	MAXMotion Position Mode 3	UINT32	RW	MAXMotionPositionMode.TRAPEZOIDAL
+186	Force Enable Status 0	BOOL	RW	false
+187	Force Enable Status 1	BOOL	RW	false
+188	Force Enable Status 2	BOOL	RW	false
+189	Force Enable Status 3	BOOL	RW	false
+190	Force Enable Status 4	BOOL	RW	false
+191	Force Enable Status 5	BOOL	RW	false
+192	Force Enable Status 6	BOOL	RW	false
+193	Force Enable Status 7	BOOL	RW	false
+194	Follower Mode Leader Id	UINT32	RW	false
+195	Follower Mode Is Inverted	BOOL	RW	false
+196	Duty Cycle Encoder Start Pulse Us	FLOAT	RW	0
+197	Duty Cycle Encoder End Pulse Us	FLOAT	RW	0
+198	Param Table Version	UINT32	R	0

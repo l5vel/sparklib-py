@@ -1,0 +1,12 @@
+# Stable CAN netdev names by vid:pid. Kernel canN ordering is not deterministic
+# across reboots, so a rig with two adapters needs this.
+#
+# Find your adapter's vid:pid with `lsusb`. 1d50:606f is candleLight / gs_usb.
+SUBSYSTEM=="net", ACTION=="add", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="606f", NAME="gsusb"
+
+# Bring the bus up at 1M classic CAN whenever it enumerates -- on boot, on
+# replug, or after any USB re-enumeration. The netdev appears DOWN with no
+# bitrate; firing on every udev `add` (not boot-only) means a plug or a
+# re-enumeration self-heals without a manual `ip link set`.
+# Matches `move` too: the NAME= rename fires a second uevent that drops an add-only tag.
+SUBSYSTEM=="net", ACTION=="add|move", ATTRS{idVendor}=="1d50", ATTRS{idProduct}=="606f", TAG+="systemd", ENV{SYSTEMD_WANTS}+="spark-can.service"

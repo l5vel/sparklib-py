@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Bring up a gs_usb/candleLight CAN netdev at 1 Mbit/s classic CAN.
+#
+# Why this exists:
+# The gs_usb (candleLight, 1d50:606f) netdev appears DOWN with no bitrate. Tying
+# bring-up to the udev add event (spark-can.service) means it configures the
+# link on every enumeration -- boot, replug, or any USB re-enumeration -- not just
+# on the first script run via the driver's own bring-up. That matters most when the adapter
+# re-enumerates mid-run: e.g. a shared USB hub renegotiating (`reset full-speed
+# USB device ... using xhci_hcd`, `-71`/EPROTO errors in dmesg) when the ZED
+# camera is on the same tree unbinds the driver and drops the link. Port-sharing
+# is not required -- this simply guarantees "plugged in -> up at 1M" every time.
+#
+# Called as: spark-can-bringup <iface>   (spark-can.service passes the udev name)
+# The SPARK bus is 1 Mbit/s classic CAN, never CAN FD. Idempotent, safe to re-run.
+set -eu
+
+IFACE="${1:-can_spark}"
+BITRATE=1000000
+# SocketCAN does not recover from bus-off on its own: with restart-ms 0 the
+# controller stays off the bus until something does a down/up, and every `spark`
+# command then reads a silent bus that looks like eight dead controllers.
+#
+# BEST EFFORT, because not every adapter can do it. Measured on rig-max
+# 2026-09-08: the candleLight/CANable gs_usb dongle rejects it outright --
+#   ip link set <your-netdev> type can bitrate 1000000 restart-ms 100
+#   Error: Device doesn't support restart from Bus Off.
+# So this is attempted and the failure is not fatal. Making it mandatory would
+# be worse than not setting it at all: under `set -e` the failed call aborts the
+# script and leaves the netdev DOWN on every boot.
+#
+# It would not have helped the gs_usb failure this repo actually sees anyway.
+# That one is a wedged USB device, not a CAN bus-off, and no CAN-layer setting
+# reaches it -- `spark canfix` rebinds the driver, which does.
+RESTART_MS=100
+
+# The netdev may not be fully registered the instant udev fires; wait briefly.
+for _ in $(seq 1 50); do
+  [ -e "/sys/class/net/$IFACE" ] && break
+  sleep 0.1
+done
+
+if [ ! -e "/sys/class/net/$IFACE" ]; then
+  echo "spark-can: netdev $IFACE never appeared -- skipping" >&2
+  exit 0
+fi
+
+# Already UP at the right bitrate? Nothing to do. restart-ms is deliberately NOT
+# part of this check: on an adapter that cannot take it, requiring it here would
+# tear the link down and rebuild it on every udev add, forever.
+if ip -d link show "$IFACE" | grep -q 'state UP' \
+   && ip -d link show "$IFACE" | grep -q "bitrate $BITRATE"; then
+  echo "spark-can: $IFACE already up at ${BITRATE} bps -- nothing to do"
+  exit 0
+fi
+
+ip link set "$IFACE" down 2>/dev/null || true
+
+# Try with auto-restart; fall back to bitrate alone on an adapter that refuses.
+if ip link set "$IFACE" type can bitrate "$BITRATE" restart-ms "$RESTART_MS" 2>/dev/null; then
+  RESTART_NOTE="restart-ms ${RESTART_MS}"
+else
+  ip link set "$IFACE" type can bitrate "$BITRATE"
+  RESTART_NOTE="restart-ms unsupported by this adapter -- bus-off needs \`spark canfix\`"
+fi
+
+ip link set "$IFACE" up txqueuelen 1000
+
+echo "spark-can: $IFACE up at ${BITRATE} bps, ${RESTART_NOTE} (classic CAN)"

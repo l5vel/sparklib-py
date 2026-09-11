@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sparklib-py"
+version = "0.1.0"
+description = "REV SPARK MAX and SPARK Flex over raw CAN from Python. No WPILib, no REVLib, no roboRIO."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+keywords = ["FRC", "REV", "SPARK MAX", "SPARK Flex", "CAN", "SocketCAN", "robotics"]
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering",
+    "Topic :: System :: Hardware :: Hardware Drivers",
+]
+dependencies = [
+    "python-can>=4.3",
+    "bitstring>=4.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+# python-can 4.6.0 and 4.6.1 drop transmits on gs_usb adapters. Pin 4.5.0 on a
+# candleLight dongle; anything else is free to take a current release.
+gsusb = ["python-can==4.5.0"]
+# A swerve steer axis needs an absolute encoder to tell it where the wheel is
+# pointing, and on most modules that is a CTRE CANcoder on a second bus. Only
+# sparklib.cancoder and the calibration tools need this; a bench rig driving one
+# SPARK does not, which is why it is an extra rather than a dependency.
+# CTRE require the CANcoder firmware major to match the phoenix6 major. Pick the
+# extra that matches the CRF your encoders actually run: a 25.x encoder against
+# phoenix6 26 reports "Firmware Too Old" and every read times out, which looks
+# exactly like dead encoders and, one layer up, like a bad magnet.
+# `swerve` takes the newest, which suits a rig kept current.
+# phoenix6 25.x imports pkg_resources, which setuptools removed at 81, so the
+# 25 pin carries a setuptools bound or the wheel installs and cannot import.
+swerve = ["phoenix6>=25"]
+swerve-25 = ["phoenix6>=25,<26", "setuptools<81"]
+swerve-26 = ["phoenix6>=26,<27"]
+
+[tool.uv]
+# One phoenix6 major at a time, so a rig cannot select both pins at once.
+conflicts = [[{ extra = "swerve-25" }, { extra = "swerve-26" }]]
+
+[dependency-groups]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+spark = "sparklib.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/l5vel/sparklib-py"
+Documentation = "https://github.com/l5vel/sparklib-py/tree/main/docs"
+
+[tool.setuptools]
+packages = ["sparklib"]
+
+[tool.setuptools.package-data]
+"sparklib" = ["data/*.yaml", "data/*.tsv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
+markers = [
+    "hardware: needs a real SPARK on a real CAN bus. Skipped unless --hardware.",
+    "adversarial: the field-failure suite under tests/adversarial. Applied to the whole package by its conftest; `-m 'not adversarial'` skips it.",
+    "inject: hardware tests that transmit onto a live bus or write a parameter. Applied by tests/hardware/conftest.py; gated further by SPARK_HW_* environment variables.",
+    "staged: hardware tests that need a person to cut power or pull a connector between two runs. Selected by SPARK_HW_STAGE.",
+    "needs_clean_bus: hardware test that needs a healthy controller and a complete inventory. Skipped while SPARK_HW_COLLIDE or SPARK_HW_CONGEST is armed, because those fault every device.",
+    "bus_off_expected: this test deliberately puts the CAN adapter into a state where bus-off is the observation, so the link guard does not fail it.",
+]
+filterwarnings = ["error::pytest.PytestReturnNotNoneWarning"]
